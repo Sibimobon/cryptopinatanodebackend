@@ -1,0 +1,18 @@
+//Routes
+
+GOOGLE LOGIN 
+
+hit pinata (amount)
+cash in(amount)
+cash out(amount)
+
+terms 
+help
+    ticket ???
+about
+
+
+SCHEMAS
+
+users
+pinata
