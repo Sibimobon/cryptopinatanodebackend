@@ -8,9 +8,9 @@ const User = require('../src/models/User')
 
 
 
+mongoose.set('useFindAndModify', false);
 
-
-router.post('/'/*, ensureAuth*/ ,async (req, res) => {
+router.post('/', ensureAuth ,async (req, res) => {
     console.log(req.body);
 
 
@@ -21,61 +21,116 @@ router.post('/'/*, ensureAuth*/ ,async (req, res) => {
         winner:null,
       }
 
-    const user = {_id: "60d9e8b1170cdd08d035b330",
-        googleId:"104412984954338180869",displayName:"Sibi Mobon",firstName:"Sibi",lastName:"Mobon",image:"https://lh3.googleusercontent.com/a/AATXAJyBXKUtzqQ0SmN_RgSrGt2hHX4ZKrI-vscZ5Dk0=s96-c",email:"siluloe@gmail.com",createdAt:"2021-06-28T15:20:17.928Z",__v:0}
-    
     try {
         //find the user in our database 
-        let pinata = await Pinata.findOne({ winner: null }).exec();
+
+        let user = await User.findById(req.user._id).exec()
+        //find one an dupadate reserved false (xor lock)
+
+        //reserved true
+        let pinata = await Pinata.findOneAndUpdate({ winner: null, reserved: false}, {reserved: true}).exec();
         //let user = User.findById(req.user._id).exec()
+        //console.log(pinata);
+        console.log(req.user);
+        console.log('following is user from db');
+        console.log(user);
+        console.log(user.balance);
 
-        //console.log(pinata !== null);
 
-        
+
         if (pinata !== null) {
 
-            var userAmount = parseInt(req.body.amount);
-            var userBalance = parseInt(req.body.balance);
-            var pinataAmount = pinata.amount;
-            var newAmount = userAmount+pinataAmount;
 
 
-            console.log(typeof userAmount);
-            console.log(typeof pinataAmount);
-            console.log(typeof newAmount);
+          
+        var userAmount = parseInt(req.body.amount);
+        var userBalance = parseInt(req.user.balance);
+        var pinataAmount = pinata.amount;
+        var newAmount = pinataAmount+userAmount;
+        var newUserBalance = (userBalance-userAmount);
+
+        
 
 
-            console.log(userAmount);
-            console.log(pinataAmount);
-            console.log(newAmount);
+        if(userBalance<userAmount){ 
+          //reserved false
+          pinata.reserved = false;
+          var query = {'_id': pinata._id, 'reserved': true};
 
+          await Pinata.findOneAndUpdate(query, pinata, function(err, doc) {
+            if (err) console.log(err);
+              console.log('pinata updated');
+          });
+          console.log('error: user balance not sufficient');
+          res.send('insufficient funds')
+          
+          return;
+        }
+        else{
+          user.balance = newUserBalance;
+          console.log('user Balance: '+userBalance);
+          console.log('user Amount: '+userAmount);
+          console.log('new user Balance: '+newUserBalance);
+          user.save();
+        }
 
-
-            console.log(pinata);
-            console.log('found pinata');
-            console.log(pinataAmount);
-            console.log(userAmount);
-            console.log(pinata.limit);
-            console.log(userAmount+pinataAmount);
-            console.log((pinataAmount+userAmount)>pinata.limit);
-            if((pinataAmount+userAmount)>pinata.limit){
+            //Pinata cracked
+        if((pinataAmount+userAmount)>=pinata.limit){
+                console.log('cracked');
                 pinata.amount = newAmount;
                 pinata.crackedAt = Date.now();
-                pinata.winner = req.user.googleId;
+                pinata.winner = /*req.*/user.googleId;
+                pinata.timesHit = pinata.timesHit +1;
+                pinata.reserved = false;
 
-                newPinata = pinata = new Pinata(newPinata);
+                var query = {'_id': pinata._id, 'reserved': true};
 
-                user.balance = userBalance+pinataAmount;
+                await Pinata.findOneAndUpdate(query, pinata, function(err, doc) {
+                  if (err) console.log(err);
+                    console.log('pinata updated');
+                });
+                
 
-                pinata.save();
-                user.save();
+                freshPinata = new Pinata(newPinata);
+                freshPinata.save()
+                              
+                user.balance = user.balance+pinata.limit;
+                
+                var userQuery = {'_id': user._id};
+                await User.findOneAndUpdate(userQuery, user, function(err, doc) {
+                  if (err) console.log(err);
+                    console.log('user updated');
+                    console.log(user.balance);
+                    console.log(newUserBalance);
+                    console.log(pinataAmount);
+                });
+
+                
             }
-            else{
-                pinata.amount = pinataAmount+userAmount;
-                pinata.save();
+            //Pinata not cracked
+        else{
+                console.log('added balance');
+                pinata.amount = newAmount;
+                pinata.timesHit = pinata.timesHit +1;
+                pinata.reserved = false;
+                
+
+                var query = {'_id': pinata._id, 'reserved': true};
+
+                await Pinata.findOneAndUpdate(query, pinata, function(err, doc) {
+                  if (err) console.log(err);
+                    console.log('pinata updated');
+                });
+
+
+                //pinata.reserved = false;
+                //pinata.save();
+                console.log(pinata);
                 console.log('added funds');
             }
+        //Pinata not there for some reason
         } else {
+          console.log('no pinata found. created new one');
           pinata = new Pinata(newPinata);
           pinata.save();
           console.log('new pinata')
@@ -92,6 +147,7 @@ router.post('/'/*, ensureAuth*/ ,async (req, res) => {
   })
 
   router.get('/', ensureAuth ,(req, res) => {
+    console.log(req.user);
     res.send(req.user);
   })
 
