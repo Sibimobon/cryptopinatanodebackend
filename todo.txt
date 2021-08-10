@@ -3,6 +3,7 @@
 GOOGLE LOGIN 
 
 hit pinata (amount)
+!!!!! user auth und user daten übernehmen
 cash in(amount)
 cash out(amount)
 
